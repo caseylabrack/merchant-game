@@ -1,5 +1,5 @@
 let d3 = require("d3")
-let {curry} = require("lodash")
+let _ = require("lodash")
 
 const Earth = "Earth",
       Venus = "Venus"
@@ -9,16 +9,16 @@ let markets =
 [
   { planet: "Earth", goods:
     [
-      { name: "twinkies", price: 100, initialQuantity: 3, currentQuantity: 3 },
-      { name: "compliments", price: 1, initialQuantity: 10, currentQuantity: 10 },
-      { name: "uranium", price: 800, initialQuantity: 3, currentQuantity: 3 }
+      { name: "twinkies", price: 100, initialQuantity: 3, quantity: 3 },
+      { name: "compliments", price: 1, initialQuantity: 10, quantity: 10 },
+      { name: "uranium", price: 800, initialQuantity: 3, quantity: 3 }
     ]
   },
   { planet: "Venus", goods:
     [
-      { name: "twinkies", price: 110, initialQuantity: 3, currentQuantity: 3 },
-      { name: "compliments", price: 1, initialQuantity: 10, currentQuantity: 10 },
-      { name: "uranium", price: 820, initialQuantity: 3, currentQuantity: 3 }
+      { name: "twinkies", price: 110, initialQuantity: 3, quantity: 3 },
+      { name: "compliments", price: 1, initialQuantity: 10, quantity: 10 },
+      { name: "uranium", price: 820, initialQuantity: 3, quantity: 3 }
     ]
   }
 ]
@@ -30,8 +30,8 @@ let ship = {
   money: 400,
   capacity: 4,
   cargo: [
-    { name: "socks", tons: 1 },
-    { name: "zukes", tons: 2 }
+    // { name: "socks", tons: 1 },
+    // { name: "zukes", tons: 2 }
   ]
 }
 
@@ -60,10 +60,10 @@ function updateMarket () {
 
   marketRowsEntering
     .append("td")
-      .text(d => d.currentQuantity)
+      .text(d => d.quantity)
 
   let marketRowsEnteringUpdating = marketRowsEntering.merge(marketRowsUpdating)
-    .style("background-color", (d,i) => i === itemIndex ? "yellow" : "white")
+      .style("background-color", d => d.selected ? "yellow" : "white")
 
   d3.select("#cargoStatus")
     .text( function (){
@@ -79,41 +79,57 @@ document.addEventListener("keydown", (e) => {
 
   switch(e.key) {
     case " ":
-    purchase(getSelectedItem)
+    purchase(getSelectedItem(localMarket.goods))
     // console.log(canPurchase(selectItem(currentMarket(markets,gameState.planet),itemIndex),shipState))
     // markets = buyItem(itemIndex)
     break;
 
     case "ArrowUp":
-    case "ArrowDown":
-    itemIndex = updateSelectIndex(e.key==="ArrowUp" ? itemIndex - 1 : itemIndex + 1)
+    scrollTable(localMarket, -1)
     break;
+    case "ArrowDown":
+    scrollTable(localMarket, 1)
+    break;
+  }
+
+  function scrollTable ({goods:g}, direction){
+    let updatedIndex = _.clamp(g.indexOf(getSelectedItem(g)) + direction, 0, g.length-1)
+    g = g.map( (x,i) => { x.selected = i===updatedIndex; return x })
   }
 
   updateMarket()
 })
 
-let updateSelectIndex = (e) => clampValue(e,0,markets.filter(z => z.planet===gameState.planet)[0].goods.length - 1)
-let clampValue = (e, min, max) => Math.min(Math.max(e,0),max)
+const compose = function(f, g) {
+    return function(x) {
+        return f(g(x));
+    };
+}
+
 let deepCopy = d => JSON.parse(JSON.stringify(d))
 let currentMarket = (markets,planet) => deepCopy(markets.filter(z => z.planet===planet)[0])
-let getSelectedItem = ({goods: g}) => g.filter(z => z.selected)[0]
-// let canPurchase = ({currentQuantity:q,price:p},{money:m}) => m > p && q > 0
-let getPropertyIsTrue = curry(function (arr,prop){
+let getSelectedItem = g => g.filter(z => z.selected)[0]
+let getPropertyIsTrue = _.curry(function (arr,prop){
   return arr.filter(z => z[prop]===true)
 })
 let marketPropertyFinder = getPropertyIsTrue(localMarket.goods)
-let canPurchase = function(ship,item){
-  return ship.capacity > playerShipTonnage("tons")
+let canPurchase = function(player,item){
+  if(ship.capacity <= ship.cargo.reduce( (sum,val) => sum + val.tons, 0)) return false //ship is full
+  if(ship.money < item.price) { return false } //can't afford it
+  if(item.quantity <= 0) { return false } //none left
+  return true
 }
-// let shipsLoad = function ({cargo:c}){
-//   c.reduce( function(sum,val){ return sum + val.tons},0)
-// }
-let sumPropertyVals = curry(function(arr,prop){
-  return arr.reduce( function(sum,val){ return sum + val[prop]},0)
-})
-let playerCargoTotals = sumPropertyVals(ship.cargo)
-
-// let marketSelector = selectWithProperty(localMarket.goods)
-
-// let selectItem = ({goods:z},index) => z[index]
+let purchase = function(item) {
+  if(canPurchase(ship,item)){
+    item.quantity -= 1
+    ship.cargo.push(itemToCargo(item))
+    return true
+  } else { return false }
+}
+let itemToCargo = function(item) {
+  let r = {}
+  r.name = item.name
+  r.pricePaid = item.price
+  r.tons = 1
+  return r
+}
