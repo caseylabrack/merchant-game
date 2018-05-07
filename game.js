@@ -1,18 +1,15 @@
 let d3 = require("d3")
 let _ = require("lodash")
 
-const Earth = "Earth",
-      Venus = "Venus"
-
-let gameState = { view: "market", planet: Earth }
+let gameState = { view: "market", planet: "Earth" }
 
 let markets =
 [
   { planet: "Earth", goods:
     [
-      { name: "twinkies", price: 2, initialQuantity: 3, quantity: 3 },
-      { name: "compliments", price: 1, initialQuantity: 10, quantity: 10 },
-      { name: "uranium", price: 8, initialQuantity: 3, quantity: 3 }
+      { name: "twinkies", price: 2, initialQuantity: 3, quantity: 3, supply: 30, demand: 28, marginalCost: 2 },
+      { name: "compliments", price: 4, initialQuantity: 10, quantity: 10, supply: 5, demand: 5, marginalCost: 4 },
+      { name: "uranium", price: 8, initialQuantity: 10, quantity: 10, supply: 10, demand: 11, marginalCost: 8 }
     ]
   },
   { planet: "Venus", goods:
@@ -23,6 +20,22 @@ let markets =
     ]
   }
 ]
+
+let scarcityPremium = d3.scaleLinear().domain([0,10]).range([2,1.1])
+
+function cycleGoods () {
+
+  markets.forEach(function(market){
+
+    market.goods.map(function(product){
+
+      product.quantity = _.clamp(product.quantity + product.supply - product.demand, 0, 100)
+
+      product.price = Math.round(product.marginalCost * scarcityPremium(product.quantity))
+      return product
+    })
+  })
+}
 
 let localMarket = markets.filter(z => z.planet===gameState.planet)[0].goods
 localMarket.selected = true
@@ -74,9 +87,7 @@ function updateShipDisplay () {
 updateShipVisual()
 function updateShipVisual () {
   let data = d3.range(0,ship.money)
-  let x = d3.scaleBand().domain(data).rangeRound([0, 200]).padding(.05)//.paddingInner(0.2).paddingOuter(.2)
-
-  console.log(data)
+  let x = d3.scaleBand().domain(d3.range(0,ship.mostMoney)).rangeRound([0, 200]).padding(.05)//.paddingInner(0.2).paddingOuter(.2)
 
   let update = d3.select("svg#moneyStatus")
     .selectAll("rect")
@@ -91,12 +102,15 @@ function updateShipVisual () {
         .attr("y", 10)
         .attr("width", x.bandwidth())
         .attr("height", 10)
-        .style("fill", "red")
+        .style("fill", "green" )
+
+  update.exit().remove()
+
 }
 
 updateShipCargo()
 function updateShipCargo () {
-  let data = d3.range(0,ship.capacity)//.map(z => ship.cargo[z] ? {hold: zfull: true} : {full:false})
+  let data = d3.range(0,ship.capacity)
   let x = d3.scaleBand().domain(data).rangeRound([0, 200]).padding(.05)
 
   let shipHolds = []
@@ -117,14 +131,10 @@ function updateShipCargo () {
       .append("rect")
 
   let updatingEntering = updating.merge(entering)
-    .attr("x", d => x(d))
-    .attr("y", 10)
-    .attr("width", x.bandwidth())
-    .attr("height", 10)
-    .style("stroke", "red")
-    .style("stroke-width", 1)
+    .attr("x", d => x(d)).attr("y", 10).attr("width", x.bandwidth()).attr("height", 10)
+    .style("stroke", "brown").style("stroke-width", 1)
     .transition()
-    .style("fill", d => shipHolds[d] ? "red" : "white")
+    .style("fill", d => shipHolds[d] ? "brown" : "white")
 }
 
 document.addEventListener("keydown", (e) => {
@@ -143,7 +153,7 @@ document.addEventListener("keydown", (e) => {
     break;
 
     case "Tab":
-    //travel
+    cycleGoods()
     break;
   }
 
