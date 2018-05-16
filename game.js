@@ -1,45 +1,52 @@
 let d3 = require("d3")
-let { clamp, gt, map, prop, add, reduce, range } = require("ramda")
+let { clamp, gt, map, prop, add, reduce, range, clone, compose } = require("ramda")
+let seedrandom = require('seedrandom')
 
 let gameState = { view: "market", planet: "Earth" }
 
-let markets =
-[
-  { planet: "Earth", goods:
-    [
-      { name: "twinkies", price: 2, initialQuantity: 3, quantity: 3, supply: 30, demand: 28, marginalCost: 2 },
-      { name: "compliments", price: 1, initialQuantity: 10, quantity: 10, supply: 5, demand: 5, marginalCost: 4 },
-      { name: "uranium", price: 8, initialQuantity: 10, quantity: 10, supply: 10, demand: 11, marginalCost: 8 }
-    ]
-  },
-  { planet: "Venus", goods:
-    [
-      { name: "twinkies", price: 2, initialQuantity: 3, quantity: 3 },
-      { name: "compliments", price: 2, initialQuantity: 10, quantity: 10 },
-      { name: "uranium", price: 9, initialQuantity: 3, quantity: 3 }
-    ]
-  }
+let rng = seedrandom("yo")
+
+let quantitySanityRange = clamp(0,100)
+let scarcityPremium = d3.scaleLinear().domain([0,10]).range([2,1.1]).clamp(true)
+
+let commodities = [
+  {name: "purple dye", marginal: 6},
+  {name: "salt", marginal: 2},
+  {name: "fish sauce", marginal: 3},
+  {name: "silk", marginal: 8}
 ]
 
-let scarcityPremium = d3.scaleLinear().domain([0,10]).range([2,1.1]).clamp(true)
-let quantitySanityRange = clamp(0,100)
+let ports = ["Alexandria", "Athens", "Beirut", "Dubrovnik", "İzmir", "Rome", "Tangier"]
 
-function cycleGoods () {
+let markets = ports.map(function(portName){
+  let m = {}
+  m.name = portName
+  m.goods = clone(commodities)
 
-  markets.forEach(function(market){
+  m.goods = m.goods.map(function (product){
 
-    market.goods.map(function(product){
-
-      product.quantity = quantitySanityRange(product.quantity + product.supply - product.demand)
-
-      product.price = Math.round(product.marginalCost * scarcityPremium(product.quantity))
-      return product
-    })
+    product.supply = Math.round(rng()*100)
+    product.demand = product.supply + Math.round(d3.randomUniform(-4,4)())
+    product.quantity = Math.round(rng()*20)
+    return updateProduct(product)
   })
+
+  return m
+})
+
+function updateProduct (product) {
+  product.quantity = quantitySanityRange(product.quantity + product.supply - product.demand)
+  product.price = Math.round(product.marginal * scarcityPremium(product.quantity))
+  product.supply += rng()*20 > 18 ? Math.round(d3.randomUniform(-2,2)) : 0 //small chance of shift every turn
+  product.demand += rng()*20 > 18 ? Math.round(d3.randomUniform(-2,2)) : 0 //small chance of shift every turn
+  return product
 }
 
-let localMarket = markets.filter(z => z.planet===gameState.planet)[0].goods
-localMarket.selected = true
+let localMarket = markets[Math.floor(rng()*markets.length)]
+let localGoods = localMarket.goods
+localGoods[0].selected = true
+
+d3.select("#portTitle").select("p").text(localMarket.name)
 
 let ship = {
   money: 4,
@@ -53,7 +60,7 @@ function updateMarket () {
 
   let marketRowsUpdating = d3.select("table#market")
     .selectAll("tr.marketItems")
-    .data(localMarket)
+    .data(localGoods)
 
   let marketRowsEntering = marketRowsUpdating
     .enter().append("tr").classed("marketItems", true)
@@ -135,19 +142,19 @@ document.addEventListener("keydown", (e) => {
 
   switch(e.key) {
     case " ":
-    purchase(getSelectedItem(localMarket))
+      purchase(getSelectedItem(localMarket))
     break;
 
     case "ArrowUp":
-    scrollTable(localMarket, -1)
+      scrollTable(localGoods, -1)
     break;
 
     case "ArrowDown":
-    scrollTable(localMarket, 1)
+      scrollTable(localGoods, 1)
     break;
 
     case "Tab":
-    cycleGoods()
+      markets.map(market => market.goods.map(updateProduct))
     break;
   }
 
@@ -161,7 +168,7 @@ document.addEventListener("keydown", (e) => {
   updateShipCargo()
 })
 
-let getSelectedItem = g => g.filter(z => z.selected)[0]
+let getSelectedItem = goods => goods.filter(z => z.selected)[0]
 let canPurchase = function(player,item){
   if(ship.capacity <= ship.cargo.reduce( (sum,val) => sum + val.tons, 0)) return false //ship is full
   if(ship.money < item.price) { return false } //can't afford it
@@ -171,7 +178,7 @@ let canPurchase = function(player,item){
 let purchase = function(item) {
   if(canPurchase(ship,item)){
     item.quantity -= 1
-    if(ship.cargo.filter(z => z.name===item.name).length > 0){ //if already carrying this type of cargo
+    if(ship.cargo.some(z => z.name===item.name)){ //if already carrying this type of cargo
       ship.cargo.filter(z => z.name===item.name)[0].tons++
     } else {
       ship.cargo.push({name: item.name, tons: 1})

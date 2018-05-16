@@ -22,6 +22,7 @@
   "dependencies": {
     "d3": "^5.1.0",
     "lodash": "^4.17.10",
-    "ramda": "^0.25.0"
+    "ramda": "^0.25.0",
+    "seedrandom": "^2.4.3"
   }
 }
