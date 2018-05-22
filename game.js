@@ -4,7 +4,7 @@ let seedrandom = require('seedrandom')
 
 let gameState = { view: "market", planet: "Earth" }
 
-let rng = seedrandom("yo")
+let rng = seedrandom("MikeBosstock")
 
 let quantitySanityRange = clamp(0,100)
 let scarcityPremium = d3.scaleLinear().domain([0,10]).range([2,1.1]).clamp(true)
@@ -54,6 +54,43 @@ let ship = {
   capacity: 4,
   cargo: []
 }
+
+const marketsChart = (function () {
+   const svg = d3.select("#marketsChart svg"),
+         margin = {top: 5, right: 20, bottom: 20, left: 5},
+         width = svg.attr("width") - margin.left - margin.right,
+         height = svg.attr("height") - margin.top - margin.bottom
+         return svg.append("g").attr("transform", "translate("+margin.left+","+margin.top+")")
+ })()
+
+const xGroups = d3.scaleBand().domain(markets.map(z => z.name)).range([0,750]).padding(.1),
+      xWithinGroup = d3.scaleBand().domain(markets[0].goods.map(z => z.name)).range([0,xGroups.bandwidth()]).padding(0),
+      y = d3.scaleLinear().domain([-10,10]).range([0,150])
+
+marketsChart.append("g").attr("class","axis axis-x").attr("transform", "translate(0,125)").call(d3.axisBottom(xGroups))
+
+updateChart()
+function updateChart() {
+
+  let marketGs = marketsChart.selectAll(".markets")
+    .data(markets)
+    .enter()
+      .append("g").classed("markets", true)
+        .attr("transform", d => `translate(${xGroups(d.name)},0)`)
+
+  marketGs
+  .selectAll("rect")
+    .data(d => d.goods)
+    .enter()
+      .append("rect")
+        .attr("x", d => xWithinGroup(d.name))
+        .attr("y", d => 130 - y(d.price))
+        .attr("height", d => y(d.price))
+        .attr("width", xWithinGroup.bandwidth())
+        .style("fill", "red")
+
+}
+
 
 updateMarket()
 function updateMarket () {
